@@ -23,11 +23,6 @@ on:
         required: false
         default: 30
         type: number
-      runs_on:
-        description: 'Runner label (self-hosted,anton or ubuntu-latest)'
-        required: false
-        default: 'self-hosted,anton'
-        type: string
     secrets:
       ANTHROPIC_AUTH_TOKEN:
         required: true
@@ -42,7 +37,7 @@ on:
 
 jobs:
   claude:
-    runs-on: ${{ fromJSON(format('[{0}]', inputs.runs_on)) }}
+    runs-on: [self-hosted, anton]
     timeout-minutes: ${{ inputs.timeout_minutes }}
     permissions:
       contents: write
