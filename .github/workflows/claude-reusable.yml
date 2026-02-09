@@ -1,0 +1,75 @@
+name: Claude Code (Reusable)
+
+on:
+  workflow_call:
+    inputs:
+      model:
+        description: 'Claude model to use (claude-sonnet-4-5, claude-haiku-4-5, claude-opus-4-6)'
+        required: false
+        default: 'claude-sonnet-4-5'
+        type: string
+      trigger_phrase:
+        description: 'Trigger phrase for Claude'
+        required: false
+        default: '@claude'
+        type: string
+      allowed_tools:
+        description: 'Comma-separated allowed Bash tools'
+        required: false
+        default: 'Bash(npm:*),Bash(npx:*),Bash(python3:*),Bash(pip:*),Bash(docker:*),Bash(git:*),Bash(gh:*),Bash(rg:*),Bash(find:*),Bash(sed:*),Bash(grep:*),Bash(awk:*),Bash(curl:*),Bash(make:*),Bash(cat:*),Bash(ls:*),Bash(head:*),Bash(tail:*)'
+        type: string
+      timeout_minutes:
+        description: 'Job timeout in minutes'
+        required: false
+        default: 30
+        type: number
+      runs_on:
+        description: 'Runner label (self-hosted,anton or ubuntu-latest)'
+        required: false
+        default: 'self-hosted,anton'
+        type: string
+    secrets:
+      ANTHROPIC_AUTH_TOKEN:
+        required: true
+      ANTHROPIC_BASE_URL:
+        required: true
+      ANTHROPIC_DEFAULT_HAIKU_MODEL:
+        required: false
+      ANTHROPIC_DEFAULT_SONNET_MODEL:
+        required: false
+      ANTHROPIC_DEFAULT_OPUS_MODEL:
+        required: false
+
+jobs:
+  claude:
+    runs-on: ${{ fromJSON(format('[{0}]', inputs.runs_on)) }}
+    timeout-minutes: ${{ inputs.timeout_minutes }}
+    permissions:
+      contents: write
+      pull-requests: write
+      issues: write
+      id-token: write
+      actions: read
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 1
+
+      - name: Run Claude Code
+        id: claude
+        uses: anthropics/claude-code-action@v1
+        env:
+          ANTHROPIC_BASE_URL: ${{ secrets.ANTHROPIC_BASE_URL }}
+          ANTHROPIC_DEFAULT_HAIKU_MODEL: ${{ secrets.ANTHROPIC_DEFAULT_HAIKU_MODEL }}
+          ANTHROPIC_DEFAULT_SONNET_MODEL: ${{ secrets.ANTHROPIC_DEFAULT_SONNET_MODEL }}
+          ANTHROPIC_DEFAULT_OPUS_MODEL: ${{ secrets.ANTHROPIC_DEFAULT_OPUS_MODEL }}
+        with:
+          anthropic_api_key: ${{ secrets.ANTHROPIC_AUTH_TOKEN }}
+          trigger_phrase: ${{ inputs.trigger_phrase }}
+          label_trigger: claude
+          additional_permissions: |
+            actions: read
+          claude_args: |
+            --model ${{ inputs.model }}
+            --allowedTools "${{ inputs.allowed_tools }}"

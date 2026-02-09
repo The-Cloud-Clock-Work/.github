@@ -1,0 +1,6 @@
+{
+  "name": "Claude Code Action",
+  "description": "AI-powered issue/PR assistant via Claude Code, routed through LiteLLM proxy",
+  "iconName": "octicon robot",
+  "categories": ["Automation", "AI"]
+}
