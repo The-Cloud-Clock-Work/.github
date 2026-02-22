@@ -60,6 +60,12 @@ on:
       MCP_API_KEY:
         description: "API key for AgentiBridge MCP server"
         required: false
+      CF_ACCESS_CLIENT_ID:
+        description: "Cloudflare Access service token client ID"
+        required: false
+      CF_ACCESS_CLIENT_SECRET:
+        description: "Cloudflare Access service token client secret"
+        required: false
 
 permissions:
   contents: write
@@ -95,12 +101,20 @@ jobs:
         env:
           BASE_URL: ${{ inputs.anthropic_url_base }}
           FALLBACK_URL: ${{ inputs.anthropic_url_fallback }}
+          CF_CLIENT_ID: ${{ secrets.CF_ACCESS_CLIENT_ID }}
+          CF_CLIENT_SECRET: ${{ secrets.CF_ACCESS_CLIENT_SECRET }}
         run: |
+          # Build CF Access headers if available
+          CF_HEADERS=""
+          if [[ -n "$CF_CLIENT_ID" && -n "$CF_CLIENT_SECRET" ]]; then
+            CF_HEADERS="-H CF-Access-Client-Id:${CF_CLIENT_ID} -H CF-Access-Client-Secret:${CF_CLIENT_SECRET}"
+          fi
+
           echo "Probing BASE: ${BASE_URL}"
-          HTTP_CODE=$(curl -s --max-time 10 -o /dev/null -w "%{http_code}" "${BASE_URL}" 2>/dev/null || true)
+          HTTP_CODE=$(curl -s --max-time 10 -o /dev/null -w "%{http_code}" $CF_HEADERS "${BASE_URL}/v1/models" 2>/dev/null || true)
           echo "  HTTP status: ${HTTP_CODE}"
 
-          if [[ "$HTTP_CODE" != "000" && -n "$HTTP_CODE" ]]; then
+          if [[ "$HTTP_CODE" =~ ^(200|401|403|404)$ ]]; then
             echo "selected=base" >> "$GITHUB_OUTPUT"
             echo "url=${BASE_URL}" >> "$GITHUB_OUTPUT"
             echo "model=${{ inputs.anthropic_model_base }}" >> "$GITHUB_OUTPUT"
@@ -108,10 +122,10 @@ jobs:
           fi
 
           echo "BASE unreachable, trying FALLBACK: ${FALLBACK_URL}"
-          HTTP_CODE=$(curl -s --max-time 10 -o /dev/null -w "%{http_code}" "${FALLBACK_URL}" 2>/dev/null || true)
+          HTTP_CODE=$(curl -s --max-time 10 -o /dev/null -w "%{http_code}" $CF_HEADERS "${FALLBACK_URL}/v1/models" 2>/dev/null || true)
           echo "  HTTP status: ${HTTP_CODE}"
 
-          if [[ "$HTTP_CODE" != "000" && -n "$HTTP_CODE" ]]; then
+          if [[ "$HTTP_CODE" =~ ^(200|401|403|404)$ ]]; then
             echo "selected=fallback" >> "$GITHUB_OUTPUT"
             echo "url=${FALLBACK_URL}" >> "$GITHUB_OUTPUT"
             echo "model=${{ inputs.anthropic_model_fallback }}" >> "$GITHUB_OUTPUT"
@@ -140,15 +154,21 @@ jobs:
         env:
           MCP_URL: ${{ inputs.mcp_server_url }}
           MCP_API_KEY: ${{ secrets.MCP_API_KEY }}
+          CF_CLIENT_ID: ${{ secrets.CF_ACCESS_CLIENT_ID }}
+          CF_CLIENT_SECRET: ${{ secrets.CF_ACCESS_CLIENT_SECRET }}
         run: |
           if [[ -z "$MCP_URL" ]]; then
             echo "MCP_SERVER_URL not set — skipping"
             echo "reachable=false" >> "$GITHUB_OUTPUT"
             exit 0
           fi
+          CF_HEADERS=""
+          if [[ -n "$CF_CLIENT_ID" && -n "$CF_CLIENT_SECRET" ]]; then
+            CF_HEADERS="-H CF-Access-Client-Id:${CF_CLIENT_ID} -H CF-Access-Client-Secret:${CF_CLIENT_SECRET}"
+          fi
           HEALTH_URL="${MCP_URL%/mcp}/health"
           HTTP_CODE=$(curl -s --max-time 10 -o /dev/null -w "%{http_code}" \
-            -H "X-API-Key: ${MCP_API_KEY}" "${HEALTH_URL}" 2>/dev/null || true)
+            -H "X-API-Key: ${MCP_API_KEY}" $CF_HEADERS "${HEALTH_URL}" 2>/dev/null || true)
           if [[ "$HTTP_CODE" == "200" ]]; then
             echo "AgentiBridge reachable"
             echo "reachable=true" >> "$GITHUB_OUTPUT"
@@ -265,10 +285,23 @@ jobs:
           PYEOF
 
       # ── Run docs audit ───────────────────────────────────────────────────────
+      - name: Build custom headers
+        id: headers
+        env:
+          CF_CLIENT_ID: ${{ secrets.CF_ACCESS_CLIENT_ID }}
+          CF_CLIENT_SECRET: ${{ secrets.CF_ACCESS_CLIENT_SECRET }}
+        run: |
+          if [[ -n "$CF_CLIENT_ID" && -n "$CF_CLIENT_SECRET" ]]; then
+            echo "value=CF-Access-Client-Id: ${CF_CLIENT_ID},CF-Access-Client-Secret: ${CF_CLIENT_SECRET}" >> "$GITHUB_OUTPUT"
+          else
+            echo "value=" >> "$GITHUB_OUTPUT"
+          fi
+
       - name: Run docs audit
         env:
           ANTHROPIC_API_KEY: ${{ steps.resolve_key.outputs.api_key }}
           ANTHROPIC_BASE_URL: ${{ steps.anthropic.outputs.url }}
+          ANTHROPIC_CUSTOM_HEADERS: ${{ steps.headers.outputs.value }}
           CLAUDE_MODEL: ${{ steps.anthropic.outputs.model }}
           GH_TOKEN: ${{ secrets.RELEASE_TOKEN || github.token }}
         run: |
