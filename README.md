@@ -17,7 +17,7 @@ The-Cloud-Clock-Work/.github/.github/workflows/<name>@main
 | `ghcr-build-reusable.yml` | Build + push Docker image to GHCR | `dockerfile`, `context` | _(uses `GITHUB_TOKEN`)_ |
 | `docker-publish-reusable.yml` | Build + push Docker image to DockerHub | `image_name` (required), `context` | `DOCKERHUB_USERNAME`, `DOCKERHUB_TOKEN` |
 | `pypi-publish-reusable.yml` | Build + publish to PyPI via OIDC | `python_version` | _(OIDC trusted publishers)_ |
-| `docs-audit-reusable.yml` | Claude-powered docs audit with MCP | `scope`, `audit_script`, `anthropic_url_base` (required), + more | `ANTHROPIC_TOKEN_BASE`, `RELEASE_TOKEN`, `MCP_API_KEY` |
+| `docs-audit-reusable.yml` | Claude-powered docs audit with MCP (self-contained prompt) | `scope`, `extra_instructions`, `anthropic_url_base` (required), + more | `ANTHROPIC_TOKEN_BASE`, `RELEASE_TOKEN`, `MCP_API_KEY` |
 
 ## Workflow Templates
 
@@ -92,20 +92,46 @@ jobs:
 
 ### PyPI Publish
 
+> **Note:** PyPI OIDC trusted publishing does NOT support reusable workflows.
+> The publish steps must be inlined in the caller. `pypi-publish-reusable.yml` exists
+> for non-OIDC use cases only.
+
 ```yaml
 # .github/workflows/publish-pypi.yml
 name: Publish to PyPI
 on:
   push:
     tags: ["v*"]
+  workflow_dispatch:
 
 permissions:
   contents: read
   id-token: write
 
 jobs:
+  gate:
+    if: github.event_name == 'workflow_dispatch'
+    runs-on: ubuntu-latest
+    environment: release
+    steps:
+      - run: echo "Manual dispatch approved"
+
   publish:
-    uses: The-Cloud-Clock-Work/.github/.github/workflows/pypi-publish-reusable.yml@main
+    needs: gate
+    if: always() && (needs.gate.result == 'success' || needs.gate.result == 'skipped')
+    runs-on: ubuntu-latest
+    environment: pypi
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Install build
+        run: pip install build
+      - name: Build wheel + sdist
+        run: python -m build
+      - name: Publish to PyPI
+        uses: pypa/gh-action-pypi-publish@release/v1
 ```
 
 ### Docs Audit
