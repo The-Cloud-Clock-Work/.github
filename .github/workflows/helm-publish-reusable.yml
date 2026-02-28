@@ -1,0 +1,97 @@
+name: Helm Publish (Reusable)
+
+on:
+  workflow_call:
+    inputs:
+      chart_path:
+        description: "Path to the chart directory (e.g. charts/agenticore)"
+        required: true
+        type: string
+      registry:
+        description: "OCI registry host"
+        required: false
+        default: "ghcr.io"
+        type: string
+      registry_namespace:
+        description: "Registry namespace (e.g. the-cloud-clock-work/charts). Auto-computed from repo owner when empty."
+        required: false
+        default: ""
+        type: string
+      helm_version:
+        description: "Helm version to install"
+        required: false
+        default: "latest"
+        type: string
+
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Helm
+        uses: azure/setup-helm@v4
+        with:
+          version: ${{ inputs.helm_version }}
+
+      - name: Resolve registry namespace
+        id: namespace
+        run: |
+          NAMESPACE="${{ inputs.registry_namespace }}"
+          if [ -z "$NAMESPACE" ]; then
+            NAMESPACE="${GITHUB_REPOSITORY_OWNER,,}/charts"
+          fi
+          echo "namespace=$NAMESPACE" >> "$GITHUB_OUTPUT"
+
+      - name: Extract chart version
+        id: version
+        run: |
+          if [[ "$GITHUB_REF" == refs/tags/v* ]]; then
+            VERSION="${GITHUB_REF#refs/tags/v}"
+          else
+            VERSION=$(grep '^version:' "${{ inputs.chart_path }}/Chart.yaml" | awk '{print $2}')
+          fi
+          echo "version=$VERSION" >> "$GITHUB_OUTPUT"
+
+      - name: Extract chart name
+        id: chart
+        run: |
+          CHART_NAME=$(grep '^name:' "${{ inputs.chart_path }}/Chart.yaml" | awk '{print $2}')
+          echo "name=$CHART_NAME" >> "$GITHUB_OUTPUT"
+
+      - name: Lint chart
+        run: helm lint "${{ inputs.chart_path }}"
+
+      - name: Package chart
+        run: |
+          helm package "${{ inputs.chart_path }}" \
+            --version "${{ steps.version.outputs.version }}" \
+            --app-version "${{ steps.version.outputs.version }}"
+
+      - name: Log in to registry
+        run: |
+          echo "${{ github.token }}" | helm registry login "${{ inputs.registry }}" \
+            --username "${{ github.actor }}" \
+            --password-stdin
+
+      - name: Push chart
+        run: |
+          helm push \
+            "${{ steps.chart.outputs.name }}-${{ steps.version.outputs.version }}.tgz" \
+            "oci://${{ inputs.registry }}/${{ steps.namespace.outputs.namespace }}"
+
+      - name: Job summary
+        run: |
+          REG="${{ inputs.registry }}"
+          NS="${{ steps.namespace.outputs.namespace }}"
+          CHART="${{ steps.chart.outputs.name }}"
+          VERSION="${{ steps.version.outputs.version }}"
+          echo "### Chart published :rocket:" >> "$GITHUB_STEP_SUMMARY"
+          echo "" >> "$GITHUB_STEP_SUMMARY"
+          echo "\`\`\`bash" >> "$GITHUB_STEP_SUMMARY"
+          echo "helm pull oci://${REG}/${NS}/${CHART} --version ${VERSION}" >> "$GITHUB_STEP_SUMMARY"
+          echo "\`\`\`" >> "$GITHUB_STEP_SUMMARY"
