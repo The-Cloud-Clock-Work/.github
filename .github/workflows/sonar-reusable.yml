@@ -107,8 +107,54 @@ jobs:
           retention-days: 7
 
       - name: SonarQube Quality Gate
+        id: quality_gate
         uses: sonarsource/sonarqube-quality-gate-action@v1
         timeout-minutes: 5
         env:
           SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
           SONAR_HOST_URL: http://localhost:9000
+
+      - name: Write job summary
+        if: always()
+        env:
+          SONAR_HOST_URL: ${{ secrets.SONAR_HOST_URL }}
+        run: |
+          TASK_FILE=".scannerwork/report-task.txt"
+          PROJECT_KEY=$(grep 'projectKey=' "$TASK_FILE" 2>/dev/null | cut -d= -f2 || echo "unknown")
+          CE_TASK_ID=$(grep 'ceTaskId=' "$TASK_FILE" 2>/dev/null | cut -d= -f2 || echo "")
+          QG_STATUS="${{ steps.quality_gate.outcome }}"
+
+          if [ "$QG_STATUS" = "success" ]; then
+            QG_BADGE="✅ **PASSED**"
+          else
+            QG_BADGE="❌ **FAILED**"
+          fi
+
+          {
+            echo "## SonarQube Analysis"
+            echo ""
+            echo "| | |"
+            echo "|---|---|"
+            echo "| **Project** | \`$PROJECT_KEY\` |"
+            echo "| **Quality Gate** | $QG_BADGE |"
+            echo "| **Task ID** | \`$CE_TASK_ID\` |"
+            echo "| **Dashboard** | [$SONAR_HOST_URL/dashboard?id=$PROJECT_KEY]($SONAR_HOST_URL/dashboard?id=$PROJECT_KEY) |"
+            echo ""
+            if [ -f coverage.xml ]; then
+              LINES_VALID=$(grep -o 'lines-valid="[0-9]*"' coverage.xml | head -1 | grep -o '[0-9]*' || echo "?")
+              LINES_COVERED=$(grep -o 'lines-covered="[0-9]*"' coverage.xml | head -1 | grep -o '[0-9]*' || echo "?")
+              LINE_RATE=$(grep -o 'line-rate="[0-9.]*"' coverage.xml | head -1 | grep -o '[0-9.]*' || echo "0")
+              PCT=$(awk "BEGIN {printf \"%.1f\", $LINE_RATE * 100}" 2>/dev/null || echo "?")
+              echo "### Coverage"
+              echo ""
+              echo "| | |"
+              echo "|---|---|"
+              echo "| **Line rate** | ${PCT}% |"
+              echo "| **Lines covered** | $LINES_COVERED / $LINES_VALID |"
+            fi
+            echo ""
+            echo "### Artifacts"
+            echo ""
+            echo "- \`coverage-report\` — Coverage XML (download from run page)"
+            echo "- \`sonar-report\` — Scanner task file with analysis ID and URLs"
+          } >> "$GITHUB_STEP_SUMMARY"
