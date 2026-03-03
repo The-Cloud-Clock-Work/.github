@@ -69,6 +69,7 @@ jobs:
           cat <<CONF | sudo tee /etc/nginx/sites-enabled/sonar-proxy
           server {
               listen 9000;
+              client_max_body_size 64m;
               location / {
                   proxy_pass ${SONAR_URL};
                   proxy_set_header Host ${SONAR_HOST};
