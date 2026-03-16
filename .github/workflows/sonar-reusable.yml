@@ -31,6 +31,12 @@ on:
       CF_ACCESS_CLIENT_SECRET:
         description: "Cloudflare Access service token secret"
         required: true
+      AWS_ACCESS_KEY_ID:
+        description: "AWS access key for CodeArtifact (optional)"
+        required: false
+      AWS_SECRET_ACCESS_KEY:
+        description: "AWS secret key for CodeArtifact (optional)"
+        required: false
 
 jobs:
   scan:
@@ -51,6 +57,10 @@ jobs:
 
       - name: Install dependencies
         if: inputs.python_version != ''
+        env:
+          AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          AWS_DEFAULT_REGION: eu-west-1
         run: ${{ inputs.install_command }}
 
       - name: Run tests with coverage
