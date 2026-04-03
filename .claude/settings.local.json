@@ -1,0 +1,13 @@
+{
+  "permissions": {
+    "ask": [
+      "Bash(git reset --hard*)",
+      "Bash(git checkout -- *)",
+      "Bash(rm -rf *)",
+      "Bash(docker rm *)",
+      "Bash(docker stop *)",
+      "Bash(kubectl delete *)"
+    ],
+    "defaultMode": "default"
+  }
+}
