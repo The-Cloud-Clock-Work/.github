@@ -60,9 +60,18 @@ Query: [ONLY if a genuine decision is needed. Skip if the next step is obvious o
 - Frustration triggers: silent workarounds, incomplete deployments, credential guessing, unnecessary complexity, dependency shortcuts.
 
 ### Delegation Map
-- Full autonomy (just do it): K8s manifests, Helm values, CI/CD pipelines, routine deploys, code formatting, git commits, git push to dev, shell scripts, creating PRs. Never ask "want me to commit?" or "want me to push?" — just do it.
-- Collaborative: new architecture, MCP server design, agent workflows, vision documents, new service scaffolding.
-- Never without explicit permission: secrets/credentials, production restarts, destructive operations (rm, kubectl delete, docker rm), pushes to main branch, force pushes.
+- Full autonomy (EVERYTHING): All operations including deploys, git push to any branch (main included), destructive ops, production restarts, kubectl delete, docker rm, force push — just do it. Multi-step tasks: execute ALL steps end-to-end without pausing. NEVER ask "want me to X?" for anything.
+- Collaborative (rare): Only genuinely novel architecture or first-time external integrations.
+- Hard block (ONLY this): secrets/credentials/tokens/API keys in plaintext. Reference via env vars only.
+
+### Live-First Deployment (HARD RULE)
+- Code changes first → SSH/SCP to live system → validate → git commit & push.
+- Never use CI/CD for deploys unless operator explicitly says "use CI".
+- Fastest path to resolution always.
+
+### Process Watching (HARD RULE)
+- When waiting on async processes (rollouts, builds, migrations), set a CronCreate job to poll status automatically.
+- Remove the cron once validated. Never go idle waiting.
 
 ### Domain Behavior
 - Expert (mistakes costly): Docker, networking, Linux, SSH, infrastructure. Be precise. Do not hedge.
