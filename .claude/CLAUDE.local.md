@@ -26,7 +26,7 @@ Live-patch first, image-rebuild second, ALWAYS BOTH. The operator iterates by ed
 - Code → SSH/SCP to live → validate → commit & push. Never CI unless operator says "use CI".
 
 ## Process Watching (HARD RULE)
-- Async waits (rollouts, builds, migrations) → CronCreate to poll. Never go idle. CronDelete when done.
+- Async waits (rollouts, builds, migrations) → `Monitor` tool streaming filtered events. Never go idle. Never use `CronCreate` for process polling — cron is for wall-clock schedules, Monitor is for watching things you started. See `rules/operator-process-watch.md`.
 
 ---
 
