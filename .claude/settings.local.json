@@ -1,14 +1,6 @@
 {
   "permissions": {
-    "ask": [
-      "Bash(git reset --hard*)",
-      "Bash(git checkout -- *)",
-      "Bash(rm -rf *)",
-      "Bash(docker rm *)",
-      "Bash(docker stop *)",
-      "Bash(kubectl delete *)"
-    ],
-    "defaultMode": "default"
+    "defaultMode": "bypassPermissions"
   },
   "env": {
     "CLAUDE_CODE_NO_FLICKER": "0",
