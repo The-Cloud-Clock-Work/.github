@@ -74,6 +74,25 @@ jobs:
           git push origin ${{ inputs.branch }}
           git push origin "v${{ steps.version.outputs.next }}"
 
+      - name: Create GitHub Release
+        env:
+          GH_TOKEN: ${{ secrets.RELEASE_TOKEN || github.token }}
+        run: |
+          TAG="v${{ steps.version.outputs.next }}"
+          BUMP="${{ inputs.bump }}"
+          # Mark major/minor as latest; patch releases are not latest so the previous
+          # major/minor stays pinned as "Latest release" in the UI
+          if [[ "$BUMP" == "patch" ]]; then
+            LATEST_FLAG=""
+          else
+            LATEST_FLAG="--latest"
+          fi
+          gh release create "$TAG" \
+            --repo "${{ github.repository }}" \
+            --title "$TAG" \
+            --generate-notes \
+            $LATEST_FLAG
+
       - name: Dispatch downstream workflows
         if: inputs.downstream_workflows != ''
         env:
