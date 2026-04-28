@@ -1,5 +1,13 @@
 name: GHCR Build (Reusable)
 
+# One reusable Dockerfile→GHCR build. Backwards-compatible with the original
+# zero-input form (agenticore build.yml uses it that way) while adding the
+# inputs needed by matrix callers (agentihub build-agent-images.yml uses these).
+#
+# Defaults preserve the legacy behavior:
+#   image_name="" → ghcr.io/<repo>
+#   tags=""       → ghcr.io/<repo>:latest + ghcr.io/<repo>:<ref_name>
+#   cache_scope="" → defaults to the dockerfile path
 on:
   workflow_call:
     inputs:
@@ -13,6 +21,33 @@ on:
         required: false
         default: "."
         type: string
+      image_name:
+        description: |
+          Full image path WITHOUT tag, e.g. ghcr.io/the-cloud-clock-work/agenticore-publisher.
+          If empty, defaults to ghcr.io/<repository> (lowercased).
+        required: false
+        default: ""
+        type: string
+      tags:
+        description: |
+          Newline-separated full tag list (each entry must include the image_name prefix
+          and a :tag suffix). If empty, defaults to <image_name>:latest plus <image_name>:<ref_name>.
+        required: false
+        default: ""
+        type: string
+      cache_scope:
+        description: |
+          GHA cache scope. For matrix callers (e.g. one cache per agent) pass a unique scope
+          per matrix element. Defaults to the dockerfile path.
+        required: false
+        default: ""
+        type: string
+    secrets:
+      ghcr_token:
+        description: |
+          Optional override for GHCR auth. Pass an org-scoped PAT (e.g. ORG_GITHUB_TOKEN)
+          when cross-repo image pushes are needed. Falls back to github.token otherwise.
+        required: false
 
 permissions:
   contents: read
@@ -24,18 +59,44 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
+      - name: Lowercase repository name
+        run: echo "REPO_LC=${GITHUB_REPOSITORY,,}" >> "$GITHUB_ENV"
+
+      - name: Resolve image_name, tags, and cache scope
+        id: resolve
+        run: |
+          IMAGE_NAME="${{ inputs.image_name }}"
+          if [ -z "$IMAGE_NAME" ]; then
+            IMAGE_NAME="ghcr.io/${REPO_LC}"
+          fi
+
+          TAGS="${{ inputs.tags }}"
+          if [ -z "$TAGS" ]; then
+            TAGS="${IMAGE_NAME}:latest"$'\n'"${IMAGE_NAME}:${{ github.ref_name }}"
+          fi
+
+          SCOPE="${{ inputs.cache_scope }}"
+          if [ -z "$SCOPE" ]; then
+            SCOPE="${{ inputs.dockerfile }}"
+          fi
+
+          echo "image_name=${IMAGE_NAME}" >> "$GITHUB_OUTPUT"
+          {
+            echo "tags<<__EOF__"
+            printf '%s\n' "$TAGS"
+            echo "__EOF__"
+          } >> "$GITHUB_OUTPUT"
+          echo "scope=${SCOPE}" >> "$GITHUB_OUTPUT"
+
       - name: Log in to GHCR
         uses: docker/login-action@v3
         with:
           registry: ghcr.io
           username: ${{ github.actor }}
-          password: ${{ github.token }}
+          password: ${{ secrets.ghcr_token || github.token }}
 
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v3
-
-      - name: Lowercase repository name
-        run: echo "REPO_LC=${GITHUB_REPOSITORY,,}" >> "$GITHUB_ENV"
 
       - name: Build and push
         uses: docker/build-push-action@v6
@@ -43,8 +104,15 @@ jobs:
           context: ${{ inputs.context }}
           file: ${{ inputs.dockerfile }}
           push: true
-          tags: |
-            ghcr.io/${{ env.REPO_LC }}:latest
-            ghcr.io/${{ env.REPO_LC }}:${{ github.ref_name }}
-          cache-from: type=gha
-          cache-to: type=gha,mode=max
+          tags: ${{ steps.resolve.outputs.tags }}
+          cache-from: type=gha,scope=${{ steps.resolve.outputs.scope }}
+          cache-to: type=gha,mode=max,scope=${{ steps.resolve.outputs.scope }}
+
+      - name: Summary
+        run: |
+          echo "### Built ${{ steps.resolve.outputs.image_name }}" >> "$GITHUB_STEP_SUMMARY"
+          echo "" >> "$GITHUB_STEP_SUMMARY"
+          echo "Tags:" >> "$GITHUB_STEP_SUMMARY"
+          echo '```' >> "$GITHUB_STEP_SUMMARY"
+          echo "${{ steps.resolve.outputs.tags }}" >> "$GITHUB_STEP_SUMMARY"
+          echo '```' >> "$GITHUB_STEP_SUMMARY"
