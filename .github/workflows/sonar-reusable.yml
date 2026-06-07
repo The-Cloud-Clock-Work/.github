@@ -89,7 +89,12 @@ jobs:
               }
           }
           CONF
-          sudo nginx -t && sudo systemctl restart nginx
+          # Start nginx via the binary, not systemctl: the self-hosted
+          # `anton` runner has no systemd bus, so `systemctl restart nginx`
+          # dies with "Failed to connect to bus: Host is down". Reload if
+          # already running, otherwise start the master process directly.
+          sudo nginx -t
+          sudo nginx -s reload 2>/dev/null || sudo nginx
           sleep 1
           curl -sf http://localhost:9000/api/system/status && echo " Proxy OK" || echo "::warning::Proxy health check failed"
 
