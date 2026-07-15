@@ -8,9 +8,9 @@ on:
         required: true
         type: string
       branch:
-        description: "Branch to release from"
+        description: "Branch to release from (dev-first fleet default; main is snapshot-only)"
         required: false
-        default: "main"
+        default: "dev"
         type: string
       version_file:
         description: "File containing the version (must have 'version = \"x.y.z\"')"

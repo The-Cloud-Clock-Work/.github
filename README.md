@@ -50,7 +50,10 @@ jobs:
     with:
       bump: ${{ inputs.bump }}
     secrets:
-      RELEASE_TOKEN: ${{ secrets.RELEASE_TOKEN }}
+      # Org standardized on ORG_GITHUB_TOKEN. There is NO org secret named
+      # RELEASE_TOKEN — referencing it resolves to empty and silently falls
+      # back to GITHUB_TOKEN.
+      RELEASE_TOKEN: ${{ secrets.ORG_GITHUB_TOKEN }}
 ```
 
 ### GHCR Build
@@ -162,7 +165,7 @@ jobs:
       anthropic_model_fallback: ${{ vars.ANTHROPIC_MODEL_FALLBACK }}
       mcp_server_url: ${{ vars.MCP_SERVER_URL }}
     secrets:
-      RELEASE_TOKEN: ${{ secrets.RELEASE_TOKEN }}
+      RELEASE_TOKEN: ${{ secrets.ORG_GITHUB_TOKEN }}
       ANTHROPIC_TOKEN_BASE: ${{ secrets.ANTHROPIC_TOKEN_BASE }}
       ANTHROPIC_TOKEN_FALLBACK: ${{ secrets.ANTHROPIC_TOKEN_FALLBACK }}
       MCP_API_KEY: ${{ secrets.MCP_API_KEY }}
